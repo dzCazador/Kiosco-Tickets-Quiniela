@@ -1,0 +1,27 @@
+// prisma/schema.prisma
+
+datasource db {
+  provider = "mysql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Machine {
+  id      Int      @id @default(autoincrement())
+  name    String   @unique
+  tickets Ticket[]
+}
+
+model Ticket {
+  id               Int      @id @default(autoincrement())
+  date             DateTime @default(now())
+  gross_amount     Float
+  prizes_amount    Float
+  telequino_amount Float
+  net_amount       Float    // Calculado: Bruto - Premios + (Telequino / 2)
+  image_url        String?
+  machineId        Int
+  machine          Machine  @relation(fields: [machineId], references: [id])
+}
