@@ -78,45 +78,46 @@ export class TicketsController {
     // Crear Excel
     const workbook = XLSX.utils.book_new();
 
-    // Datos de tickets
-    const ticketData = tickets.map(ticket => ({
-      ID: ticket.id,
-      Fecha: ticket.date.toISOString().split('T')[0],
-      Máquina: ticket.machineId,
-      Bruto: ticket.gross_amount,
-      Premios: ticket.prizes_amount,
-      Telequino: ticket.telequino_amount,
-      Neto: ticket.net_amount
-    }));
+    // Crear filas con la planilla solicitada
+    const rows: any[][] = [
+      ['Fecha', 'Máquina', 'Recaudación', 'Premios', 'Telebingo', 'Comisión', 'Descuentos', 'Total']
+    ];
 
-    const worksheet = XLSX.utils.json_to_sheet(ticketData, {
-      header: ['ID', 'Fecha', 'Máquina', 'Bruto', 'Premios', 'Telequino', 'Neto']
+    tickets.forEach((ticket, index) => {
+      const rowNumber = index + 2;
+      rows.push([
+        ticket.date.toISOString().split('T')[0],
+        ticket.machineId,
+        ticket.gross_amount,
+        ticket.prizes_amount,
+        ticket.telequino_amount,
+        { f: `C${rowNumber}*0.1` },
+        { f: `E${rowNumber}/2` },
+        { f: `C${rowNumber}-D${rowNumber}-F${rowNumber}-G${rowNumber}` }
+      ]);
     });
 
-    const totales = {
-      Total_Bruto: tickets.reduce((sum, t) => sum + t.gross_amount, 0),
-      Total_Premios: tickets.reduce((sum, t) => sum + t.prizes_amount, 0),
-      Total_Telequino: tickets.reduce((sum, t) => sum + t.telequino_amount, 0),
-      Total_Neto: tickets.reduce((sum, t) => sum + t.net_amount, 0),
-    };
-
-    XLSX.utils.sheet_add_aoa(worksheet, [[
-      '',
+    // Agregar fila de totales al final para mantener todo en la misma hoja
+    rows.push([]);
+    rows.push([
       '',
       'Totales',
-      totales.Total_Bruto,
-      totales.Total_Premios,
-      totales.Total_Telequino,
-      totales.Total_Neto
-    ]], { origin: -1 });
+      { f: `SUM(C2:C${tickets.length + 1})` },
+      { f: `SUM(D2:D${tickets.length + 1})` },
+      { f: `SUM(E2:E${tickets.length + 1})` },
+      { f: `SUM(F2:F${tickets.length + 1})` },
+      { f: `SUM(G2:G${tickets.length + 1})` },
+      { f: `SUM(H2:H${tickets.length + 1})` }
+    ]);
 
-    const numericColumns = ['D', 'E', 'F', 'G'];
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+
     const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-    for (let row = range.s.r + 1; row <= range.e.r; ++row) {
-      for (const col of numericColumns) {
-        const address = `${col}${row + 1}`;
+    for (let row = 2; row <= range.e.r + 1; ++row) {
+      for (const col of ['C', 'D', 'E', 'F', 'G', 'H']) {
+        const address = `${col}${row}`;
         const cell = worksheet[address];
-        if (cell && typeof cell.v === 'number') {
+        if (cell && (typeof cell.v === 'number' || cell.f)) {
           cell.z = '#,##0.00';
         }
       }
