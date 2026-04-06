@@ -1,0 +1,15 @@
+name: Scheduled Service Ping
+
+on:
+  schedule:
+    # Se ejecuta cada 10 minutos
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Permite ejecutarlo manualmente para pruebas
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Service
+        run: |
+          curl -I https://kiosco-tickets-quiniela.onrender.com/
