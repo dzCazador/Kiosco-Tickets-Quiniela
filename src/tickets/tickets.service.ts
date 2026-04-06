@@ -28,8 +28,7 @@ export class TicketsService {
         );
       }    
 
-    // 1. Cálculo sugerido: Bruto - Premios + (Telequino / 2)
-    const sugerido = bruto - premios + (telequino / 2);
+    const sugerido = bruto - premios ;
 
     // 2. Si el usuario envió un neto manual lo usamos, si no, el sugerido
     const netoFinal = createTicketDto.net_amount 

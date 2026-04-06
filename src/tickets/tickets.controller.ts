@@ -1,11 +1,16 @@
 import { 
   Controller, Get, Post, Body, Patch, Param, Delete, 
-  Query, UseInterceptors, UploadedFile 
+  Query, UseInterceptors, UploadedFile, Res 
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import type { Express } from 'express';
 import { extname } from 'path';
+import * as sharp from 'sharp';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as XLSX from 'xlsx';
+import * as archiver from 'archiver';
 
 import { TicketsService } from './tickets.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
@@ -20,18 +25,35 @@ export class TicketsController {
     storage: diskStorage({
       destination: './uploads', // Asegúrate de que esta carpeta exista en la raíz
       filename: (req, file, cb) => {
-        // Generamos un nombre único: timestamp-random.extension
+        // Generamos un nombre único: timestamp-random.jpg (siempre JPEG)
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+        cb(null, `${uniqueSuffix}.jpg`);
       },
     }),
   }))
-  create(
+  async create(
     @Body() createTicketDto: CreateTicketDto, 
     @UploadedFile() file: Express.Multer.File
   ) {
     // Si hay archivo, guardamos la ruta relativa para la DB
     const imageUrl = file ? `/uploads/${file.filename}` : null;
+
+    // Procesar la imagen para reducir calidad si existe
+    if (file) {
+      const filePath = path.join('./uploads', file.filename);
+      try {
+        // Convertir a JPEG con calidad reducida
+        await sharp(filePath)
+          .jpeg({ quality: 70 })
+          .toFile(filePath + '_temp');
+        // Reemplazar el archivo original con el comprimido
+        fs.renameSync(filePath + '_temp', filePath);
+      } catch (error) {
+        console.error('Error procesando imagen:', error);
+        // Si falla, continuar sin comprimir
+      }
+    }
+
     return this.ticketsService.create(createTicketDto, imageUrl);
   }
 
@@ -44,9 +66,89 @@ export class TicketsController {
     return this.ticketsService.findAll(from, to);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.ticketsService.findOne(+id);
+  // GET /tickets/package?from=2024-01-01&to=2024-01-31
+  @Get('package')
+  async getPackage(
+    @Res() res: any,
+    @Query('from') from?: string,
+    @Query('to') to?: string
+  ) {
+    const tickets = await this.ticketsService.findAll(from, to);
+
+    // Crear Excel
+    const workbook = XLSX.utils.book_new();
+
+    // Datos de tickets
+    const ticketData = tickets.map(ticket => ({
+      ID: ticket.id,
+      Fecha: ticket.date.toISOString().split('T')[0],
+      Máquina: ticket.machineId,
+      Bruto: ticket.gross_amount,
+      Premios: ticket.prizes_amount,
+      Telequino: ticket.telequino_amount,
+      Neto: ticket.net_amount
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(ticketData, {
+      header: ['ID', 'Fecha', 'Máquina', 'Bruto', 'Premios', 'Telequino', 'Neto']
+    });
+
+    const totales = {
+      Total_Bruto: tickets.reduce((sum, t) => sum + t.gross_amount, 0),
+      Total_Premios: tickets.reduce((sum, t) => sum + t.prizes_amount, 0),
+      Total_Telequino: tickets.reduce((sum, t) => sum + t.telequino_amount, 0),
+      Total_Neto: tickets.reduce((sum, t) => sum + t.net_amount, 0),
+    };
+
+    XLSX.utils.sheet_add_aoa(worksheet, [[
+      '',
+      '',
+      'Totales',
+      totales.Total_Bruto,
+      totales.Total_Premios,
+      totales.Total_Telequino,
+      totales.Total_Neto
+    ]], { origin: -1 });
+
+    const numericColumns = ['D', 'E', 'F', 'G'];
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    for (let row = range.s.r + 1; row <= range.e.r; ++row) {
+      for (const col of numericColumns) {
+        const address = `${col}${row + 1}`;
+        const cell = worksheet[address];
+        if (cell && typeof cell.v === 'number') {
+          cell.z = '#,##0.00';
+        }
+      }
+    }
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Tickets');
+
+    // Crear ZIP
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename=tickets_${from || 'all'}_${to || 'all'}.zip`);
+
+    archive.pipe(res);
+
+    // Agregar Excel al ZIP
+    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    archive.append(excelBuffer, { name: 'tickets.xlsx' });
+
+    // Agregar imágenes
+    for (const ticket of tickets) {
+      if (ticket.image_url) {
+        const imagePath = path.join(process.cwd(), ticket.image_url);
+        if (fs.existsSync(imagePath)) {
+          const dateStr = ticket.date.toISOString().split('T')[0];
+          const newName = `Maquina${ticket.machineId}_${dateStr}.jpg`;
+          archive.file(imagePath, { name: `images/${newName}` });
+        }
+      }
+    }
+
+    await archive.finalize();
   }
 
   @Patch(':id')

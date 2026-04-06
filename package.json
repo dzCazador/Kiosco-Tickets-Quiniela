@@ -27,13 +27,17 @@
     "@nestjs/serve-static": "^5.0.4",
     "@prisma/adapter-mariadb": "^7.4.2",
     "@prisma/client": "^7.4.2",
+    "@types/sharp": "^0.31.1",
+    "archiver": "^7.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
     "dotenv": "^17.3.1",
     "joi": "^18.0.2",
     "multer": "^2.1.1",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sharp": "^0.34.5",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
