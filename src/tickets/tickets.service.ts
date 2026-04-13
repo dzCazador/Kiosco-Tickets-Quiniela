@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { CreateDuoTicketDto } from './dto/create-duo-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -45,6 +46,36 @@ export class TicketsService {
         image_url: imageUrl,
         machineId: parseInt(createTicketDto.machineId),
       },
+    });
+  }
+
+  async createDuo(createDuoTicketDto: CreateDuoTicketDto, imageUrl?: string) {
+    const ticketDate = new Date(createDuoTicketDto.date);
+
+    const firstTicket = {
+      date: ticketDate,
+      gross_amount: parseFloat(createDuoTicketDto.gross_amount_one),
+      prizes_amount: parseFloat(createDuoTicketDto.prizes_amount_one),
+      telequino_amount: parseFloat(createDuoTicketDto.telequino_amount_one),
+      net_amount: parseFloat(createDuoTicketDto.net_amount_one),
+      image_url: imageUrl,
+      machineId: 1,
+    };
+
+    const secondTicket = {
+      date: ticketDate,
+      gross_amount: parseFloat(createDuoTicketDto.gross_amount_two),
+      prizes_amount: parseFloat(createDuoTicketDto.prizes_amount_two),
+      telequino_amount: parseFloat(createDuoTicketDto.telequino_amount_two),
+      net_amount: parseFloat(createDuoTicketDto.net_amount_two),
+      image_url: imageUrl,
+      machineId: 2,
+    };
+
+    return this.prisma.$transaction(async (prisma) => {
+      const ticket1 = await prisma.ticket.create({ data: firstTicket });
+      const ticket2 = await prisma.ticket.create({ data: secondTicket });
+      return [ticket1, ticket2];
     });
   }
 

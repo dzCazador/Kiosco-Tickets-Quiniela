@@ -13,6 +13,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       // Prisma v7+ requires either an adapter or accelerateUrl.
       adapter: new PrismaMariaDb(envs.DATABASE_URL),
       log: ['query', 'info', 'warn', 'error'],
+      // Add transaction timeout settings
+      transactionOptions: {
+        maxWait: 20000, // Maximum time to wait for a transaction to start (20 seconds)
+        timeout: 30000, // Maximum time for a transaction to complete (30 seconds)
+      },
     });
   }
 
